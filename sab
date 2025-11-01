@@ -1,0 +1,59 @@
+-- HOST SCRIPT – SAVE SERVER + LISTEN FOR KICK (Run in YOUR executor)
+local Players = game:GetService("Players")
+local DataStoreService = game:GetService("DataStoreService")
+local player = Players.LocalPlayer
+
+if player.UserId ~= 2551851736 then
+    print("HOST SCRIPT: Only run on UserId 2551851736")
+    return
+end
+
+local store = DataStoreService:GetGlobalDataStore()
+local INVITE_KEY = "JoinInvite_2551851736"
+local KICK_KEY   = "KickHost_2551851736"
+
+-- Save server info
+local placeId = game.PlaceId
+local jobId = game.JobId
+
+if not jobId or jobId == "" then
+    print("HOST: Not in live server.")
+    return
+end
+
+local inviteData = {
+    placeId = placeId,
+    jobId = jobId,
+    name = player.DisplayName or player.Name,
+    time = os.time()
+}
+
+pcall(function()
+    store:SetAsync(INVITE_KEY, inviteData)
+end)
+
+print("HOST: Invite saved! Waiting for joiner...")
+
+-- === LISTEN FOR KICK SIGNAL ===
+local kickConnection
+kickConnection = game:GetService("RunService").Heartbeat:Connect(function()
+    local success, kick = pcall(function()
+        return store:GetAsync(KICK_KEY)
+    end)
+
+    if success and kick == true then
+        print("HOST: Joiner requested slot – kicking self...")
+        pcall(function()
+            store:RemoveAsync(KICK_KEY)  -- clear signal
+        end)
+        kickConnection:Disconnect()
+        player:Kick("Slot freed for friend – rejoin with new invite!")
+    end
+end)
+
+-- Auto-cleanup after 5 min
+delay(300, function()
+    if kickConnection then kickConnection:Disconnect() end
+    pcall(function() store:RemoveAsync(INVITE_KEY) end)
+    pcall(function() store:RemoveAsync(KICK_KEY) end)
+end)
